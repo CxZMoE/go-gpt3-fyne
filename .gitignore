@@ -1,0 +1,4 @@
+*.exe
+debug
+auth.json
+*.log
