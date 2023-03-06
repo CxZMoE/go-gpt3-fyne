@@ -285,7 +285,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 			if strings.Contains(tokens, "[DONE]") {
 				c.AddChatMessageHistory(message)
 				fmt.Println()
-				c.content += "\n"
+				c.content += "\n\n"
 				break
 			}
 
