@@ -43,7 +43,17 @@ func (e *PromptEntry) KeyDown(key *fyne.KeyEvent) {
 	if e.alt && key.Name == fyne.KeyReturn {
 		log.Println("Send")
 		e.Disable()
-		e.chat.Send(e.Text, e.rcbox)
+
+		msg, err := e.chat.Send(e.Text, e.rcbox)
+		if err != nil {
+			log.Println(err)
+		}
+		if !e.chat.Options.IsStreamming {
+			e.chat.content += msg.Content + "\n"
+			e.rcbox.Text = e.chat.content
+			e.rcbox.CursorRow = 65536
+			e.rcbox.Refresh()
+		}
 		e.Text = ""
 		e.Enable()
 		e.FocusGained()

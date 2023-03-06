@@ -235,6 +235,9 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
 	req.Header.Set("Content-Type", "application/json")
+	if c.Options.IsStreamming {
+		req.Header.Set("Connection", "keep-alive")
+	}
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -258,16 +261,25 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 	}
 
 	if c.Options.IsStreamming {
-		sc := bufio.NewScanner(resp.Body)
+		sc := bufio.NewReader(resp.Body)
 		index := 0
 		var message ChatMessage
-		for sc.Scan() {
-			text := sc.Text()
-			if len(text) == 0 {
+		for {
+			// if resp.Header.Get("Connection") != "keep-alive" {
+			// 	log.Println(resp.Header.Get("Connection"))
+			// }
+			buf, _, err := sc.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					return c.Send(msg, rt)
+				}
+				return nil, err
+			}
+			if len(buf) == 0 {
 				continue
 			}
 
-			tokens := strings.Split(text, "data: ")[1]
+			tokens := strings.Split(string(buf), "data: ")[1]
 
 			// Exit when received [DONE]
 			if strings.Contains(tokens, "[DONE]") {
@@ -276,6 +288,8 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 				c.content += "\n"
 				break
 			}
+
+			// Parse Data
 			var data = make(map[string]interface{})
 			err = json.Unmarshal([]byte(tokens), &data)
 			if err != nil {
@@ -301,7 +315,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 					// show content
 					// fmt.Print(delta_content)
 					c.content += delta_content
-					rt.CursorRow = rt.CursorRow + 1
+					rt.CursorRow = 65536
 					rt.SetText(c.content)
 
 				} else {
@@ -313,6 +327,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		return &message, nil
 	}
 
+	log.Println("selecting no stream mode")
 	// [200] OK
 	var respBody map[string]interface{}
 	respBodyData, err := io.ReadAll(resp.Body)

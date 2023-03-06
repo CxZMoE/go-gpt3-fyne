@@ -38,7 +38,9 @@ func NewChatGPT(apiKey, model, username string) (*ChatGPT, error) {
 	if err == nil && PROXY != "" {
 		c = &http.Client{
 			Transport: &http.Transport{
-				Proxy: http.ProxyURL(proxyUrl),
+				Proxy:               http.ProxyURL(proxyUrl),
+				DisableKeepAlives:   false,
+				MaxIdleConnsPerHost: 10,
 			},
 		}
 		log.Println("Using Proxy:", proxyUrl.String())
