@@ -170,6 +170,7 @@ func (c *ChatContext) LoadChatMessageHistory() {
 	defer f.Close()
 	data, _ := io.ReadAll(f)
 	json.Unmarshal(data, &c.History)
+
 	log.Println("Loaded length:", len(c.History))
 }
 
@@ -241,9 +242,19 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		// pop the last msg
-		c.History = c.History[:len(c.History)-1]
-		return nil, fmt.Errorf("send chat body failed: %s", err.Error())
+		i := 0
+		// Retry
+		for i = 0; i < 5; i++ {
+			resp, err = c.Client.Do(req)
+			if err == nil {
+				break
+			}
+		}
+		if i == 4 {
+			// pop the last msg
+			c.History = c.History[:len(c.History)-1]
+			return nil, fmt.Errorf("send chat body failed: %s", err.Error())
+		}
 	}
 	defer resp.Body.Close()
 
@@ -256,6 +267,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		if resp.StatusCode == 400 {
 			log.Println("Token's too long, clear token.")
 			c.CleanChatMessageHistory()
+			return c.Send(msg, rt)
 		}
 		return nil, fmt.Errorf("chat failed with status code: %d\nbody: %s", resp.StatusCode, string(buf))
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -97,6 +98,24 @@ func RunUI(chat *ChatContext) {
 
 	promptInput.FocusGained()
 	// win.SetFixedSize(true)
+
+	win.CenterOnScreen()
+	for _, msg := range chat.History {
+		if msg.Role == CHAT_ROLE_USER {
+			chat.content += fmt.Sprintf("==> %s\n\n", msg.Content)
+		}
+		if msg.Role == CHAT_ROLE_ASSIST {
+			chat.content += fmt.Sprintf("%s\n\n", msg.Content)
+		}
+		rcbox.Text = chat.content
+		rcbox.CursorRow = 65536
+		rcbox.Refresh()
+	}
+
+	chat.content += "\n\n========== History ==========\n\n"
+	rcbox.Text = chat.content
+	rcbox.CursorRow = 65536
+	rcbox.Refresh()
 
 	win.ShowAndRun()
 }
