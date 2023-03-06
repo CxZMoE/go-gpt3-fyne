@@ -1,4 +1,4 @@
-module github.com/CxZMoE/go-gpt-client
+module github.com/CxZMoE/go-gpt3-fyne
 
 go 1.19
 
