@@ -276,6 +276,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		sc := bufio.NewReader(resp.Body)
 		index := 0
 		var message ChatMessage
+		var data = make(map[string]interface{})
 		for {
 			// if resp.Header.Get("Connection") != "keep-alive" {
 			// 	log.Println(resp.Header.Get("Connection"))
@@ -302,7 +303,6 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 			}
 
 			// Parse Data
-			var data = make(map[string]interface{})
 			err = json.Unmarshal([]byte(tokens), &data)
 			if err != nil {
 				panic(fmt.Sprintf("err: %s\n data: %s", err.Error(), string(tokens)))
