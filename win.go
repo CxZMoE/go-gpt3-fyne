@@ -43,7 +43,10 @@ func (e *PromptEntry) KeyDown(key *fyne.KeyEvent) {
 	if e.alt && key.Name == fyne.KeyReturn {
 		log.Println("Send")
 		e.Disable()
-		e.chat.Send(e.Text, e.rcbox)
+		_, err := e.chat.Send(e.Text, e.rcbox)
+		if err != nil {
+			log.Println(err)
+		}
 		e.Text = ""
 		e.Enable()
 		e.FocusGained()
@@ -87,6 +90,6 @@ func RunUI(chat *ChatContext) {
 
 	promptInput.FocusGained()
 	// win.SetFixedSize(true)
-
+	win.CenterOnScreen()
 	win.ShowAndRun()
 }
