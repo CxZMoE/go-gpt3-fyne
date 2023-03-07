@@ -170,6 +170,7 @@ func (c *ChatContext) LoadChatMessageHistory() {
 	defer f.Close()
 	data, _ := io.ReadAll(f)
 	json.Unmarshal(data, &c.History)
+
 	log.Println("Loaded length:", len(c.History))
 }
 
@@ -236,12 +237,25 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
 	req.Header.Set("Content-Type", "application/json")
+	if c.Options.IsStreamming {
+		req.Header.Set("Connection", "keep-alive")
+	}
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		// pop the last msg
-		c.History = c.History[:len(c.History)-1]
-		return nil, fmt.Errorf("send chat body failed: %s", err.Error())
+		i := 0
+		// Retry
+		for i = 0; i < 5; i++ {
+			resp, err = c.Client.Do(req)
+			if err == nil {
+				break
+			}
+		}
+		if i == 4 {
+			// pop the last msg
+			c.History = c.History[:len(c.History)-1]
+			return nil, fmt.Errorf("send chat body failed: %s", err.Error())
+		}
 	}
 	defer resp.Body.Close()
 
@@ -254,32 +268,43 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		if resp.StatusCode == 400 {
 			log.Println("Token's too long, clear token.")
 			c.CleanChatMessageHistory()
+			return c.Send(msg, rt)
 		}
 		return nil, fmt.Errorf("chat failed with status code: %d\nbody: %s", resp.StatusCode, string(buf))
 	}
 
 	if c.Options.IsStreamming {
-		sc := bufio.NewScanner(resp.Body)
+		sc := bufio.NewReader(resp.Body)
 		index := 0
 		var message ChatMessage
-		log.Println("Chat Stream Enter")
-		for sc.Scan() {
-			text := sc.Text()
-			if len(text) == 0 {
+		var data = make(map[string]interface{})
+		for {
+			// if resp.Header.Get("Connection") != "keep-alive" {
+			// 	log.Println(resp.Header.Get("Connection"))
+			// }
+			buf, _, err := sc.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					return c.Send(msg, rt)
+				}
+				return nil, err
+			}
+			if len(buf) == 0 {
 				continue
 			}
 
-			tokens := strings.Split(text, "data: ")[1]
+			tokens := strings.Split(string(buf), "data: ")[1]
 
 			// Exit when received [DONE]
 			if strings.Contains(tokens, "[DONE]") {
 				log.Println("Reveived [DONE]")
 				c.AddChatMessageHistory(message)
 				fmt.Println()
-				c.content += "\n"
+				c.content += "\n\n"
 				break
 			}
-			var data = make(map[string]interface{})
+
+			// Parse Data
 			err = json.Unmarshal([]byte(tokens), &data)
 			if err != nil {
 				panic(fmt.Sprintf("err: %s\n data: %s", err.Error(), string(tokens)))
@@ -310,8 +335,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 					// fmt.Print(delta_content)
 					c.content += delta_content
 					rt.CursorRow = 65536
-					rt.Text = c.content
-					rt.Refresh()
+					rt.SetText(c.content)
 
 				} else {
 					continue
@@ -323,6 +347,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		return &message, nil
 	}
 
+	log.Println("selecting no stream mode")
 	// [200] OK
 	var respBody map[string]interface{}
 	respBodyData, err := io.ReadAll(resp.Body)

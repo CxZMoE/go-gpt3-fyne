@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -43,9 +44,16 @@ func (e *PromptEntry) KeyDown(key *fyne.KeyEvent) {
 	if e.alt && key.Name == fyne.KeyReturn {
 		log.Println("Send")
 		e.Disable()
-		_, err := e.chat.Send(e.Text, e.rcbox)
+
+		msg, err := e.chat.Send(e.Text, e.rcbox)
 		if err != nil {
 			log.Println(err)
+		}
+		if !e.chat.Options.IsStreamming {
+			e.chat.content += msg.Content + "\n"
+			e.rcbox.Text = e.chat.content
+			e.rcbox.CursorRow = 65536
+			e.rcbox.Refresh()
 		}
 		e.Text = ""
 		e.Enable()
@@ -90,6 +98,24 @@ func RunUI(chat *ChatContext) {
 
 	promptInput.FocusGained()
 	// win.SetFixedSize(true)
+
 	win.CenterOnScreen()
+	for _, msg := range chat.History {
+		if msg.Role == CHAT_ROLE_USER {
+			chat.content += fmt.Sprintf("==> %s\n\n", msg.Content)
+		}
+		if msg.Role == CHAT_ROLE_ASSIST {
+			chat.content += fmt.Sprintf("%s\n\n", msg.Content)
+		}
+		rcbox.Text = chat.content
+		rcbox.CursorRow = 65536
+		rcbox.Refresh()
+	}
+
+	chat.content += "\n\n========== History ==========\n\n"
+	rcbox.Text = chat.content
+	rcbox.CursorRow = 65536
+	rcbox.Refresh()
+
 	win.ShowAndRun()
 }
