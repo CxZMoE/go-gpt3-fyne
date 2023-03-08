@@ -327,7 +327,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 					// show content
 					// fmt.Print(delta_content)
 					c.content += delta_content
-					rt.CursorRow = 65536
+					// rt.CursorRow = 65536
 					rt.SetText(c.content)
 
 				} else {

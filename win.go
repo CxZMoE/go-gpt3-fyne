@@ -82,7 +82,7 @@ func RunUI(chat *ChatContext) {
 
 	// rcboxContent := ""
 	rcbox := widget.NewMultiLineEntry()
-	rcbox.Wrapping = fyne.TextWrapWord
+
 	promptInput := NewPromptEntry(chat, rcbox)
 	promptInput.SetPlaceHolder("message")
 
@@ -94,7 +94,6 @@ func RunUI(chat *ChatContext) {
 
 	c := container.New(lay, rcbox, promptInput)
 	win.Resize(fyne.NewSize(1280, 720))
-	win.SetContent(c)
 
 	promptInput.FocusGained()
 	// win.SetFixedSize(true)
@@ -116,6 +115,6 @@ func RunUI(chat *ChatContext) {
 	rcbox.Text = chat.content
 	rcbox.CursorRow = 65536
 	rcbox.Refresh()
-
+	win.SetContent(c)
 	win.ShowAndRun()
 }
