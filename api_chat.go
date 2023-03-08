@@ -217,7 +217,8 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		Role:    CHAT_ROLE_USER,
 		Content: msg,
 	})
-	c.content += "==> " + msg + "\n"
+	c.content += "\n==> " + msg + "\n"
+	rt.Text = c.content
 
 	// Create a reqeust body
 	chatBody := ChatBody{
@@ -296,6 +297,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 
 			// Exit when received [DONE]
 			if strings.Contains(tokens, "[DONE]") {
+				log.Println("Reveived [DONE]")
 				c.AddChatMessageHistory(message)
 				fmt.Println()
 				c.content += "\n\n"
@@ -307,8 +309,12 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 			if err != nil {
 				panic(fmt.Sprintf("err: %s\n data: %s", err.Error(), string(tokens)))
 			}
-			delta_data := data["choices"].([]interface{})[0].(map[string]interface{})["delta"].(map[string]interface{})
 
+			if data["choices"] == nil {
+				return nil, fmt.Errorf("err happened choices is nil")
+			}
+
+			delta_data := data["choices"].([]interface{})[0].(map[string]interface{})["delta"].(map[string]interface{})
 			// first data shold be role=
 			if index == 0 {
 				id := data["id"]
@@ -316,6 +322,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 				if id != nil && role != nil {
 					message.id = id.(string)
 					message.Role = role.(string)
+					c.content += "\n"
 				} else {
 					return nil, fmt.Errorf("role is nil")
 				}
@@ -336,6 +343,7 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 			}
 			index += 1
 		}
+		log.Println("Chat Stream Exit")
 		return &message, nil
 	}
 
