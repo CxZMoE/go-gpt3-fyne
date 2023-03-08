@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -101,16 +102,35 @@ func init() {
 	log.Println("capacity:", CAPACITY)
 }
 
-func main() {
+// CLI start a cli version
+func CLI() {
 	// Create a ChatGPT client
 	gpt, err := NewChatGPT(API_KEY, DEFAULT_MODEL, DEFAULT_USERNAME)
 	if err != nil {
 		panic(err)
 	}
-	// Create a new chat coversation
-	chat := gpt.NewChat()
+	log.Println("ChatGPT client created with apikey:", gpt.apiKey)
 
-	// Start UI
-	RunUI(chat)
-	defer logFile.Close()
+	newChat := gpt.MakeChatContext()
+	newChat.LoadChatMessageHistory() // load history data stored in filesystem if needed.
+
+	sc := bufio.NewScanner(os.Stdin)
+	sc.Split(bufio.ScanLines)
+	for {
+		fmt.Print("==> ")
+		if sc.Scan() {
+			fmt.Printf("<== [%s]\n", time.Now().Format(time.RFC1123))
+			recvMsg, err := newChat.Send(sc.Text())
+			if err != nil {
+				panic(err)
+			}
+			if !newChat.Options.IsStreamming {
+				fmt.Printf("[%s]\n%s\n\n%s\n\n", recvMsg.id, time.Now().Format(time.RFC1123), recvMsg.Content)
+			}
+		}
+	}
+}
+
+func main() {
+	CLI()
 }

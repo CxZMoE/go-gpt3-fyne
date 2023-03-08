@@ -11,8 +11,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"fyne.io/fyne/v2/widget"
 )
 
 /*
@@ -121,9 +119,6 @@ type ChatContext struct {
 	Options ChatOptions
 	// Chat http client
 	Client *http.Client
-
-	// full content
-	content string
 }
 
 // MakeChatContext makes a new chat context
@@ -162,7 +157,6 @@ func (c *ChatContext) LoadChatMessageHistory() {
 		return
 	}
 
-	log.Println("Load last session data.")
 	f, err := os.Open(fd)
 	if err != nil {
 		panic(err)
@@ -171,7 +165,7 @@ func (c *ChatContext) LoadChatMessageHistory() {
 	data, _ := io.ReadAll(f)
 	json.Unmarshal(data, &c.History)
 
-	log.Println("Loaded length:", len(c.History))
+	log.Println("Load History:", len(c.History))
 }
 
 func (c *ChatContext) CleanChatMessageHistory() {
@@ -198,9 +192,9 @@ func (c *ChatContext) SyncChatMessageHistory() {
 
 // AddChatMessageHistory add chat message to history of context
 func (c *ChatContext) AddChatMessageHistory(appendMsgs ...ChatMessage) {
-	for _, cm := range appendMsgs {
-		log.Println("Add message of role:", cm.Role, "content:", cm.Content)
-	}
+	// for _, cm := range appendMsgs {
+	// 	log.Println("Add message of role:", cm.Role, "content:", cm.Content)
+	// }
 	// remove history index 0 when history length == 3
 	c.History = append(c.History, appendMsgs...)
 	if len(c.History) > CAPACITY {
@@ -210,16 +204,13 @@ func (c *ChatContext) AddChatMessageHistory(appendMsgs ...ChatMessage) {
 }
 
 // Send send a new message to server
-func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
+func (c *ChatContext) Send(msg string) (*ChatMessage, error) {
 
 	// Add new msg to history firstly
 	c.AddChatMessageHistory(ChatMessage{
 		Role:    CHAT_ROLE_USER,
 		Content: msg,
 	})
-	c.content += "\n==> " + msg + "\n"
-	rt.Text = c.content
-
 	// Create a reqeust body
 	chatBody := ChatBody{
 		Messages:    c.History,
@@ -240,35 +231,22 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 	if c.Options.IsStreamming {
 		req.Header.Set("Connection", "keep-alive")
 	}
-
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		i := 0
-		// Retry
-		for i = 0; i < 5; i++ {
-			resp, err = c.Client.Do(req)
-			if err == nil {
-				break
-			}
-		}
-		if i == 4 {
-			// pop the last msg
-			c.History = c.History[:len(c.History)-1]
-			return nil, fmt.Errorf("send chat body failed: %s", err.Error())
-		}
+		return nil, fmt.Errorf("send chat body failed: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
 	// err status code
 	if resp.StatusCode != http.StatusOK {
 		buf, _ := io.ReadAll(resp.Body)
-		log.Println("resp.Body() =>\n", string(buf))
-		log.Println("resp.Body() =>END")
 		resp.Body.Close()
 		if resp.StatusCode == 400 {
-			log.Println("Token's too long, clear token.")
+			log.Println("==> Token's too long, clear tokens.")
 			c.CleanChatMessageHistory()
-			return c.Send(msg, rt)
+		} else if resp.StatusCode == 429 {
+			// That model is currently overloaded with other requests. You can retry your request, or contact us through our help center at help.openai.com if the error persists. (Please include the request ID 072e8bfd41ccdd6cd1d573f7f5fd6dcd in your message.
+			return c.Send(msg)
 		}
 		return nil, fmt.Errorf("chat failed with status code: %d\nbody: %s", resp.StatusCode, string(buf))
 	}
@@ -279,50 +257,42 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 		var message ChatMessage
 		var data = make(map[string]interface{})
 		for {
-			// if resp.Header.Get("Connection") != "keep-alive" {
-			// 	log.Println(resp.Header.Get("Connection"))
-			// }
 			buf, _, err := sc.ReadLine()
 			if err != nil {
-				if err == io.EOF {
-					return c.Send(msg, rt)
-				}
 				return nil, err
 			}
 			if len(buf) == 0 {
 				continue
 			}
+			tokens := strings.Split(string(buf), "data: ")
+			if len(tokens) < 2 {
+				log.Println(tokens)
+				return nil, fmt.Errorf("failed to parse tokens: %v", tokens)
+			}
 
-			tokens := strings.Split(string(buf), "data: ")[1]
-
+			token := tokens[1]
 			// Exit when received [DONE]
-			if strings.Contains(tokens, "[DONE]") {
-				log.Println("Reveived [DONE]")
-				c.AddChatMessageHistory(message)
+			if strings.Contains(token, "[DONE]") {
 				fmt.Println()
-				c.content += "\n\n"
+				c.AddChatMessageHistory(message)
 				break
 			}
 
 			// Parse Data
-			err = json.Unmarshal([]byte(tokens), &data)
+			err = json.Unmarshal([]byte(token), &data)
 			if err != nil {
-				panic(fmt.Sprintf("err: %s\n data: %s", err.Error(), string(tokens)))
+				panic(fmt.Sprintf("err: %s\n data: %s", err.Error(), string(token)))
 			}
-
 			if data["choices"] == nil {
 				return nil, fmt.Errorf("err happened choices is nil")
 			}
-
 			delta_data := data["choices"].([]interface{})[0].(map[string]interface{})["delta"].(map[string]interface{})
-			// first data shold be role=
 			if index == 0 {
 				id := data["id"]
 				role := delta_data["role"]
 				if id != nil && role != nil {
 					message.id = id.(string)
 					message.Role = role.(string)
-					c.content += "\n"
 				} else {
 					return nil, fmt.Errorf("role is nil")
 				}
@@ -331,23 +301,16 @@ func (c *ChatContext) Send(msg string, rt *widget.Entry) (*ChatMessage, error) {
 				if content != nil {
 					delta_content := content.(string)
 					message.Content += delta_content
-					// show content
-					// fmt.Print(delta_content)
-					c.content += delta_content
-					rt.CursorRow = 65536
-					rt.SetText(c.content)
-
+					fmt.Print(delta_content)
 				} else {
 					continue
 				}
 			}
 			index += 1
 		}
-		log.Println("Chat Stream Exit")
 		return &message, nil
 	}
 
-	log.Println("selecting no stream mode")
 	// [200] OK
 	var respBody map[string]interface{}
 	respBodyData, err := io.ReadAll(resp.Body)

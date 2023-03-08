@@ -73,7 +73,6 @@ func NewChatGPT(apiKey, model, username string) (*ChatGPT, error) {
 // NewChat create new chat
 func (c *ChatGPT) NewChat() *ChatContext {
 	log.Println("ChatGPT client created with apikey:", c.apiKey)
-
 	newChat := c.MakeChatContext()
 	newChat.LoadChatMessageHistory() // load history data stored in filesystem if needed.
 
